@@ -2,6 +2,7 @@
 /temp/
 *.odt#
 *.ods#
+/node_modules/
 
 # Don't include temp files:
 /pdfOcr_temp*/
