@@ -17,9 +17,9 @@ full_path="$(readlink -f $0)"
 dir="$(dirname "${full_path}")"
 # echo "dir = \"$dir\""
 
-path2exec="${dir}/pdf2searchablepdf.sh" # path to the executable bash script
+path2exec="${dir}/pdfOcr.sh" # path to the executable bash script
 # echo "path2exec = \"$path2exec\""
 
-ln -sf "$path2exec" ~/bin/pdf2searchablepdf
+ln -sf "$path2exec" ~/bin/pdfOcr
 
-echo "Done: symbolic link should have been placed in \"~/bin/pdf2searchablepdf\"."
+echo "Done: symbolic link should have been placed in \"~/bin/pdfOcr\"."

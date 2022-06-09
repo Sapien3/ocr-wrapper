@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# pdf2searchablepdf
+# pdfOcr
 # Gabriel Staples
 # Started: 9 Nov. 2019
-# - Source code: https://github.com/ElectricRCAircraftGuy/PDF2SearchablePDF
+# - Source code: https://github.com/ElectricRCAircraftGuy/pdfOcr
 #
 # Note to self: see also my
 # [git-blametool.sh](https://github.com/ElectricRCAircraftGuy/eRCaGuy_dotfiles/blob/master/useful_scripts/git-blametool.sh)
@@ -28,7 +28,7 @@ export LC_NUMERIC="en_US.UTF-8"
 
 
 SCRIPT_NAME="$(basename "$0")"
-VERSION_SHORT_STR="pdf2searchablepdf ('$SCRIPT_NAME') version $VERSION"
+VERSION_SHORT_STR="pdfOcr ('$SCRIPT_NAME') version $VERSION"
 VERSION_LONG_STR="\
 $VERSION_SHORT_STR
 Author = $AUTHOR
@@ -108,7 +108,7 @@ Tesseract Wiki:
 https://github.com/tesseract-ocr/tesseract/wiki.
 
 Source code:
-https://github.com/ElectricRCAircraftGuy/PDF2SearchablePDF
+https://github.com/ElectricRCAircraftGuy/pdfOcr
 "
 
 # A "debug" version of `echo`, to only print when `DEBUG_PRINTS_ON` is `true`
@@ -129,7 +129,7 @@ print_version() {
 
 # Sample test commands I can run
 # This test code is not in a "complete" state by any means. It's more of a proof-of-concept at the
-# moment. Cmd: `pdf2searchablepdf --run_tests`
+# moment. Cmd: `pdfOcr --run_tests`
 # TODO: Link this to the "run_tests.sh" file in this directory as well!
 run_tests() {
     echo "THIS FEATURE IS A WORK-IN-PROGRESS"
@@ -302,11 +302,11 @@ main() {
         pdf_out="${pdf_in_no_ext}_searchable"
 
         # 1. First, create temporary directory to place all intermediate files
-        # - name it "pdf2searchablepdf_temp_yyyymmdd-hhmmss.ns"
+        # - name it "pdfOcr_temp_yyyymmdd-hhmmss.ns"
 
         timestamp="$(date '+%Y%m%d-%H%M%S.%N')"
         # echo "timestamp = \"$timestamp\""
-        temp_dir="pdf2searchablepdf_temp_${timestamp}"
+        temp_dir="pdfOcr_temp_${timestamp}"
         # echo "temp_dir = \"$temp_dir\""
         echo "Creating temporary working directory: \"$temp_dir\""
         mkdir -p "$temp_dir"
@@ -335,7 +335,7 @@ main() {
 
         # FOR DEVELOPMENT TO SPEED THIS UP BY USING PREVIOUSLY-GENERATED FILES INSTEAD
         # (comment out the above command, & uncomment the below command):
-        # cp "pdf2searchablepdf_temp_20191110-231200.594322352"/* "$temp_dir"
+        # cp "pdfOcr_temp_20191110-231200.594322352"/* "$temp_dir"
 
         echo "All TIF files created."
 
@@ -374,6 +374,6 @@ main() {
 
 parse_args "$@"
 time main
-echo "END OF pdf2searchablepdf."
+echo "END OF pdfOcr."
 
 
