@@ -1,0 +1,10 @@
+# POST http://localhost:3070 HTTP/1.1
+# content-type: application/json
+
+# {
+#     "test":"bahaa"
+# }
+
+GET http://localhost:3070/pdf/normal.png HTTP/1.1
+content-type: application/json
+
