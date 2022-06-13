@@ -1,17 +1,5 @@
 #!/bin/bash
 
-# pdfOcr
-# Gabriel Staples
-# Started: 9 Nov. 2019
-# - Source code: https://github.com/ElectricRCAircraftGuy/pdfOcr
-#
-# Note to self: see also my
-# [git-blametool.sh](https://github.com/ElectricRCAircraftGuy/eRCaGuy_dotfiles/blob/master/useful_scripts/git-blametool.sh)
-# script for help on bash syntax and examples of advanced option parsing in bash.
-#
-# Test runs:
-# See "run_tests.sh"
-
 start=$SECONDS
 
 RETURN_CODE_SUCCESS=0
