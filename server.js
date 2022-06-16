@@ -27,23 +27,51 @@ const fs = require("fs");
 const express = require("express");
 const app = express();
 const cors = require("cors");
+const multer = require("multer");
+const { exec } = require("child_process");
 
-app.use(
-  cors({
-    origin: "http://localhost:3000",
-  })
-);
-app.use("/pdf", express.static(__dirname + "/inputs"));
+// app.use(express.json());
+app.use(cors());
+// app.use(
+//   cors({
+//     origin: "http://localhost:3000",
+//   })
+// );
+// app.use("/pdf", express.static(__dirname + "/inputs"));
 // app.use("/pdf", express.static(__dirname + "/imgs"));
 const port = 3070;
 
-app.post("/", (req, res) => {
-  console.log("body", req.body);
-  console.log("files", req.files);
-  // executeScript("pdfOcr ./inputs/normal-ocr.pdf");
-  res.send("done\n");
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "./inputs");
+  },
+  filename: function (req, file, cb) {
+    cb(null, "input-" + file.originalname);
+  },
 });
 
+const upload = multer({ storage: storage }).single("file");
+
+function script(file) {
+  const filename = file.filename;
+  exec(`bash ./pdfOcr.sh ./inputs/${filename}`);
+  console.log("done");
+}
+app.post("/", (req, res) => {
+  upload(req, res, function (err) {
+    if (err instanceof multer.MulterError) {
+      return res.status(500).json(err);
+    } else if (err) {
+      return res.status(500).json(err);
+    }
+    // console.log(req.file);
+    script(req.file);
+    return res.status(200).send(req.file);
+  });
+  // res.send("done\n");
+});
+
+/*
 app.get("/", (req, res) => {
   // executeScript("pdfOcr ./inputs/normal-ocr.pdf");
 
@@ -55,6 +83,7 @@ app.get("/", (req, res) => {
     const buffArr = new Uint8Array(data);
     console.log(buffArr);
     // res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Type", "application/octet-stream");
     res.send(buffArr);
     // console.log(data);
     // res.end(Buffer.from(data, "binary"));
@@ -75,6 +104,7 @@ app.get("/", (req, res) => {
   // res.send(file);
   // res.send(file);
 });
+*/
 
 app.listen(port, () => {
   console.log(`app listening on port ${port}`);
