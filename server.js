@@ -43,19 +43,60 @@ const port = 3070;
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, "./inputs");
+    cb(null, "./outputs");
   },
   filename: function (req, file, cb) {
-    cb(null, "input-" + file.originalname);
+    cb(null, "input-" + file.originalname.replace(/\s+/, ""));
   },
 });
 
 const upload = multer({ storage: storage }).single("file");
 
-function script(file) {
+function clean() {
+  fs.readdir("./outputs", (err, files) => {
+    if (err) throw err;
+
+    for (const file of files) {
+      fs.unlink(`./outputs/${file}`, (err) => {
+        if (err) throw err;
+      });
+    }
+  });
+}
+
+function pdfToBinary(res) {
+  fs.readdir("./outputs", (err, files) => {
+    if (err) throw err;
+    files.forEach((file) => {
+      const target = file.match("_searchable");
+      if (target) {
+        console.log(file);
+        processFile(file);
+      }
+    });
+  });
+
+  function processFile(file) {
+    fs.readFile(`./outputs/${file}`, function (err, data) {
+      const buffArr = new Uint8Array(data);
+      console.log(buffArr);
+      // res.setHeader("Content-Type", "application/octet-stream");
+      res.send(buffArr);
+    });
+  }
+}
+
+async function script(file, res) {
   const filename = file.filename;
-  exec(`bash ./pdfOcr.sh ./inputs/${filename}`);
-  console.log("done");
+  exec(`bash ./pdfOcr.sh ./outputs/${filename}`, (error, stdout, stderr) => {
+    console.log(stdout);
+    console.log(stderr);
+    if (error !== null) {
+      console.log(`exec error: ${error}`);
+    }
+    pdfToBinary(res);
+    clean();
+  });
 }
 app.post("/", (req, res) => {
   upload(req, res, function (err) {
@@ -65,8 +106,8 @@ app.post("/", (req, res) => {
       return res.status(500).json(err);
     }
     // console.log(req.file);
-    script(req.file);
-    return res.status(200).send(req.file);
+    script(req.file, res);
+    // return res.status(200).send(req.file);
   });
   // res.send("done\n");
 });
