@@ -112,40 +112,9 @@ app.post("/", (req, res) => {
   // res.send("done\n");
 });
 
-/*
 app.get("/", (req, res) => {
-  // executeScript("pdfOcr ./inputs/normal-ocr.pdf");
-
-  // res.send(`<a href="normal-ocr.pdf">normal-ocr.pdf</a>`);
-  // const file = fs.ReadStream("./inputs/normal-ocr.pdf");
-  // fs.readFile("./inputs/normal-ocr.pdf", function (err, data) {
-  fs.readFile("./inputs/searchable.pdf", function (err, data) {
-    // Display the file content
-    const buffArr = new Uint8Array(data);
-    console.log(buffArr);
-    // res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Type", "application/octet-stream");
-    res.send(buffArr);
-    // console.log(data);
-    // res.end(Buffer.from(data, "binary"));
-    // res.setHeader("Content-Type", "application/pdf");
-    // res.setHeader("Content-Type", "MimeType");
-    // res.pipe(buffArr);
-  });
-
-  // const file = fs.createReadStream("./inputs/searchable.pdf");
-  // const stat = fs.statSync("./inputs/searchable.pdf");
-  // res.setHeader("Content-Length", stat.size);
-  // res.setHeader("Content-Type", "application/pdf");
-  // res.setHeader("Content-Disposition", "attachment; filename=searchable.pdf");
-  // file.pipe(res);
-  // console.log(file);
-
-  // console.log("done");
-  // res.send(file);
-  // res.send(file);
+  res.send("connected\n");
 });
-*/
 
 app.listen(port, () => {
   console.log(`app listening on port ${port}`);
