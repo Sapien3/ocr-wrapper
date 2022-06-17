@@ -5,8 +5,6 @@ start=$SECONDS
 RETURN_CODE_SUCCESS=0
 RETURN_CODE_ERROR=1
 
-VERSION="0.5.0"
-AUTHOR="Gabriel Staples"
 
 DEBUG_PRINTS_ON="false" # true or false; can also be passed in as an option: `-d` or `--debug`
 
@@ -277,7 +275,7 @@ main() {
             # file="$file_in_no_ext.$extension"
             # # pdf_out="${pdf_in_no_ext}_searchable"
             # echo "Custom input: process img"
-            tesseract -l "$lang" $pdf_in ./output/result pdf 
+            tesseract -l "$lang" $pdf_in ./outputs/result_searchable pdf 
             exit
         fi
 

@@ -46,7 +46,7 @@ const storage = multer.diskStorage({
     cb(null, "./outputs");
   },
   filename: function (req, file, cb) {
-    cb(null, "input-" + file.originalname.replace(/\s+/, ""));
+    cb(null, file.originalname.split(" ").join("-"));
   },
 });
 
@@ -86,8 +86,13 @@ function pdfToBinary(res) {
   }
 }
 
+function sleep(time) {
+  return new Promise((resolve) => setTimeout(resolve, time));
+}
+
 async function script(file, res) {
   const filename = file.filename;
+  console.log(`bash ./pdfOcr.sh ./outputs/${filename}`);
   exec(`bash ./pdfOcr.sh ./outputs/${filename}`, (error, stdout, stderr) => {
     console.log(stdout);
     console.log(stderr);
@@ -98,6 +103,7 @@ async function script(file, res) {
     clean();
   });
 }
+
 app.post("/", (req, res) => {
   upload(req, res, function (err) {
     if (err instanceof multer.MulterError) {
@@ -105,11 +111,10 @@ app.post("/", (req, res) => {
     } else if (err) {
       return res.status(500).json(err);
     }
-    // console.log(req.file);
+    // console.log("file: ", req.file);
     script(req.file, res);
     // return res.status(200).send(req.file);
   });
-  // res.send("done\n");
 });
 
 app.get("/", (req, res) => {
