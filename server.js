@@ -86,10 +86,6 @@ function pdfToBinary(res) {
   }
 }
 
-function sleep(time) {
-  return new Promise((resolve) => setTimeout(resolve, time));
-}
-
 async function script(file, res) {
   const filename = file.filename;
   console.log(`bash ./pdfOcr.sh ./outputs/${filename}`);

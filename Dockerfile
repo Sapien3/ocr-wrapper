@@ -11,11 +11,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # WORKDIR /home
-# ARG TRIGGER=1
+# ARG TRIGGER=2
 # RUN git clone https://github.com/Sapien3/ocr-wrapper.git
-
 WORKDIR /home/ocr-wrapper
-COPY . .
+COPY package.json ./
 RUN npm install
+
+COPY . .
 EXPOSE 3070
 CMD ["npm", "start"]
