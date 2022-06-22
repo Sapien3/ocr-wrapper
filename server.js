@@ -81,6 +81,7 @@ function pdfToBinary(res) {
 
   function processFile(file) {
     fs.readFile(`./outputs/${file}`, function (err, data) {
+      if (err) throw err;
       const buffArr = new Uint8Array(data);
       // console.log(buffArr);
       // res.setHeader("Content-Type", "application/octet-stream");
@@ -94,7 +95,6 @@ async function script(file, res) {
 
   if (fileType === "image") {
     normalProcess(file, res);
-    clean();
     return;
   }
 
@@ -105,12 +105,11 @@ async function script(file, res) {
   const pagesCount = pdfDoc.getPageCount();
   if (pagesCount <= 2) {
     normalProcess(file, res);
-    clean();
     return;
   }
 
-  batchProcess(file, res);
-  clean();
+  await batchProcess(file, res, pdfDoc);
+  // clean();
 }
 
 async function normalProcess(file, res) {
@@ -123,32 +122,34 @@ async function normalProcess(file, res) {
       console.log(`exec error: ${error}`);
     }
     pdfToBinary(res);
+    clean();
   });
 }
 
-async function batchProcess(file, res) {
+async function batchProcess(file, res, pdfDoc) {
   //contains files names order of which to excute correspondingly
   const queue = [];
 
   const filename = file.filename;
-  const url = `./outputs/${filename}`;
-  await splitPdf(url);
+  // const url = `./outputs/${filename}`;
+  await splitPdf(pdfDoc);
   // await sleep(4000);
-  fs.readdir("./outputs", (err, files) => {
+  fs.readdir("./outputs", async (err, files) => {
     if (err) throw err;
-    files.forEach((file) => {
-      console.log(file.match("splittedFile"));
-    });
+
+    for (let i = 0; i < files.length; i++) {
+      const wantedFile = files[i].match("splittedFile");
+      if (!wantedFile) continue;
+      if (i === 1) {
+        await normalProcess({ filename: files[i] }, res);
+      }
+    }
   });
-  res.status(200).send("OK");
+  // res.status(200).send("OK");
   return;
 }
 
-async function splitPdf(pathToPdf) {
-  const docmentAsBytes = await fs.promises.readFile(pathToPdf);
-
-  const pdfDoc = await PDFDocument.load(docmentAsBytes);
-
+async function splitPdf(pdfDoc) {
   const numberOfPages = pdfDoc.getPages().length;
 
   for (let i = 0; i < numberOfPages; i++) {

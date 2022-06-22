@@ -17,7 +17,6 @@ SCRIPT_NAME="$(basename "$0")"
 VERSION_SHORT_STR="pdfOcr ('$SCRIPT_NAME') version $VERSION"
 VERSION_LONG_STR="\
 $VERSION_SHORT_STR
-Author = $AUTHOR
 See '$SCRIPT_NAME -h' for more info.
 "
 
