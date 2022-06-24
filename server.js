@@ -74,20 +74,33 @@ function pdfToBinary(res) {
     files.forEach((file) => {
       const target = file.match("_searchable");
       if (target) {
-        processFile(file);
+        processFile(file, res);
       }
     });
   });
+}
 
-  function processFile(file) {
-    fs.readFile(`./outputs/${file}`, function (err, data) {
-      if (err) throw err;
-      const buffArr = new Uint8Array(data);
-      // console.log(buffArr);
-      // res.setHeader("Content-Type", "application/octet-stream");
-      res.send(buffArr);
-    });
-  }
+function processFile(file, res) {
+  fs.readFile(`./outputs/${file}`, function (err, data) {
+    if (err) throw err;
+    // console.log(data);
+    const buffArr = new Uint8Array(data);
+    // const buffArr = Buffer.from(data);
+    // console.log(buffArr);
+    res.setHeader("Content-Type", "application/octet-stream");
+    // res.writeHead(200, {
+    //   "Content-Length": Buffer.byteLength(buffArr),
+    //   "Content-Type": "application/octet-stream; charset=utf-8",
+    // });
+    res.status(201).send(buffArr);
+    // res.write("OK");
+    // sleep(3000).then(() => {
+    //   res.write(JSON.stringify(buffArr));
+    //   res.end();
+    // });
+    // res.write(JSON.stringify(buffArr));
+    // res.end();
+  });
 }
 
 async function script(file, res) {
@@ -122,6 +135,7 @@ async function normalProcess(file, res) {
       console.log(`exec error: ${error}`);
     }
     pdfToBinary(res);
+    // sleep(3000).then(() => res.status(200).send(new Uint8Array([1, 2, 3, 4])));
     clean();
   });
 }
@@ -176,6 +190,7 @@ app.post("/", (req, res) => {
     }
     // console.log("file: ", req.file);
     script(req.file, res);
+    // normalProcess(req.file, res);
     // playground(req.file, res);
     // return res.status(200).send(req.file);
   });
