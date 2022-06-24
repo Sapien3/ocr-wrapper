@@ -41,6 +41,9 @@ app.use(cors());
 // app.use("/pdf", express.static(__dirname + "/imgs"));
 const port = 3070;
 
+//queue indicates the priority of which file to process first
+let queue = [];
+
 function sleep(time) {
   return new Promise((resolve) => setTimeout(resolve, time));
 }
@@ -68,11 +71,25 @@ function clean() {
   });
 }
 
-function pdfToBinary(res) {
+async function normalProcess(file, res) {
+  const filename = file.filename;
+  console.log(`bash ./pdfOcr.sh ./outputs/${filename}`);
+  exec(`bash ./pdfOcr.sh ./outputs/${filename}`, (error, stdout, stderr) => {
+    console.log(stdout);
+    console.log(stderr);
+    if (error !== null) {
+      console.log(`exec error: ${error}`);
+    }
+    pdfToBinary(res, filename);
+  });
+}
+
+function pdfToBinary(res, filename) {
   fs.readdir("./outputs", (err, files) => {
     if (err) throw err;
     files.forEach((file) => {
-      const target = file.match("_searchable");
+      const fileWithoutEx = filename.split(".")[0];
+      const target = file.match(`${fileWithoutEx}_searchable`);
       if (target) {
         processFile(file, res);
       }
@@ -83,23 +100,9 @@ function pdfToBinary(res) {
 function processFile(file, res) {
   fs.readFile(`./outputs/${file}`, function (err, data) {
     if (err) throw err;
-    // console.log(data);
     const buffArr = new Uint8Array(data);
-    // const buffArr = Buffer.from(data);
-    // console.log(buffArr);
-    res.setHeader("Content-Type", "application/octet-stream");
-    // res.writeHead(200, {
-    //   "Content-Length": Buffer.byteLength(buffArr),
-    //   "Content-Type": "application/octet-stream; charset=utf-8",
-    // });
+    console.log("Unassigned int length: ", buffArr.length);
     res.status(201).send(buffArr);
-    // res.write("OK");
-    // sleep(3000).then(() => {
-    //   res.write(JSON.stringify(buffArr));
-    //   res.end();
-    // });
-    // res.write(JSON.stringify(buffArr));
-    // res.end();
   });
 }
 
@@ -116,34 +119,15 @@ async function script(file, res) {
   const docmentAsBytes = await fs.promises.readFile(url);
   const pdfDoc = await PDFDocument.load(docmentAsBytes);
   const pagesCount = pdfDoc.getPageCount();
-  if (pagesCount <= 2) {
+  if (pagesCount === 1) {
     normalProcess(file, res);
     return;
   }
 
   await batchProcess(file, res, pdfDoc);
-  // clean();
-}
-
-async function normalProcess(file, res) {
-  const filename = file.filename;
-  console.log(`bash ./pdfOcr.sh ./outputs/${filename}`);
-  exec(`bash ./pdfOcr.sh ./outputs/${filename}`, (error, stdout, stderr) => {
-    console.log(stdout);
-    console.log(stderr);
-    if (error !== null) {
-      console.log(`exec error: ${error}`);
-    }
-    pdfToBinary(res);
-    // sleep(3000).then(() => res.status(200).send(new Uint8Array([1, 2, 3, 4])));
-    clean();
-  });
 }
 
 async function batchProcess(file, res, pdfDoc) {
-  //contains files names order of which to excute correspondingly
-  const queue = [];
-
   const filename = file.filename;
   // const url = `./outputs/${filename}`;
   await splitPdf(pdfDoc);
@@ -151,15 +135,21 @@ async function batchProcess(file, res, pdfDoc) {
   fs.readdir("./outputs", async (err, files) => {
     if (err) throw err;
 
-    for (let i = 0; i < files.length; i++) {
-      const wantedFile = files[i].match("splittedFile");
-      if (!wantedFile) continue;
-      if (i === 1) {
-        await normalProcess({ filename: files[i] }, res);
-      }
-    }
+    queue = files
+      .filter((file) => file.match("splittedFile"))
+      .map((e) => ({ file: e, status: "pending" }))
+      .sort((a, b) => {
+        const aOrder = Number(a.file.match(/\d+/)[0]);
+        const bOrder = Number(b.file.match(/\d+/)[0]);
+        return aOrder - bOrder;
+      });
+    console.log("queue from batchProcessing: ", queue);
+
+    const firstPendingFile = queue.find((e) => e.status === "pending");
+    normalProcess({ filename: firstPendingFile.file }, res);
+    const index = queue.indexOf(firstPendingFile);
+    queue[index].status = "done";
   });
-  // res.status(200).send("OK");
   return;
 }
 
@@ -181,7 +171,7 @@ async function writePdfBytesToFile(fileName, pdfBytes) {
   return fs.promises.writeFile(`./outputs/${fileName}`, pdfBytes);
 }
 
-app.post("/", (req, res) => {
+app.post("/store", (req, res) => {
   upload(req, res, function (err) {
     if (err instanceof multer.MulterError) {
       return res.status(500).json(err);
@@ -192,8 +182,21 @@ app.post("/", (req, res) => {
     script(req.file, res);
     // normalProcess(req.file, res);
     // playground(req.file, res);
-    // return res.status(200).send(req.file);
   });
+});
+
+app.post("/queue", (req, res) => {
+  console.log("queue: ", queue);
+  const is200 = queue.every((e) => e.status === "done");
+  if (is200) {
+    res.send("finished processing");
+    clean();
+    return;
+  }
+  const firstPendingFile = queue.find((e) => e.status === "pending");
+  normalProcess({ filename: firstPendingFile.file }, res);
+  const index = queue.indexOf(firstPendingFile);
+  queue[index].status = "done";
 });
 
 app.get("/", (req, res) => {
