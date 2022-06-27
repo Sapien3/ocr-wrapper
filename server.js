@@ -43,6 +43,7 @@ const port = 3070;
 
 //queue indicates the priority of which file to process first
 let queue = [];
+let pagesCount;
 
 function sleep(time) {
   return new Promise((resolve) => setTimeout(resolve, time));
@@ -71,8 +72,9 @@ function clean() {
   });
 }
 
-async function normalProcess(file, res) {
+async function normalProcess(file, res, index) {
   const filename = file.filename;
+  queue[index].status = "current";
   console.log(`bash ./pdfOcr.sh ./outputs/${filename}`);
   exec(`bash ./pdfOcr.sh ./outputs/${filename}`, (error, stdout, stderr) => {
     console.log(stdout);
@@ -100,9 +102,27 @@ function pdfToBinary(res, filename) {
 function processFile(file, res) {
   fs.readFile(`./outputs/${file}`, function (err, data) {
     if (err) throw err;
+
+    const currentQueue = queue.find((e) => e.status === "current");
+    console.log("currentQueue: ", currentQueue);
+    const index = queue.indexOf(currentQueue);
     const buffArr = new Uint8Array(data);
     console.log("Unassigned int length: ", buffArr.length);
+
+    if (is200(res)) {
+      // res.send(buffArr);
+      queue[index].binary = buffArr;
+      queue[index].status = "done";
+      res.status(200).end("finished processing");
+      console.log("last queue check: ", queue);
+      clean();
+      console.log("queue from process file: ", queue);
+      return;
+    }
+
     res.status(201).send(buffArr);
+    queue[index].binary = buffArr;
+    queue[index].status = "done";
   });
 }
 
@@ -118,7 +138,7 @@ async function script(file, res) {
   const url = `./outputs/${filename}`;
   const docmentAsBytes = await fs.promises.readFile(url);
   const pdfDoc = await PDFDocument.load(docmentAsBytes);
-  const pagesCount = pdfDoc.getPageCount();
+  pagesCount = pdfDoc.getPageCount();
   if (pagesCount === 1) {
     normalProcess(file, res);
     return;
@@ -137,7 +157,7 @@ async function batchProcess(file, res, pdfDoc) {
 
     queue = files
       .filter((file) => file.match("splittedFile"))
-      .map((e) => ({ file: e, status: "pending" }))
+      .map((e) => ({ file: e, status: "pending", binary: [] }))
       .sort((a, b) => {
         const aOrder = Number(a.file.match(/\d+/)[0]);
         const bOrder = Number(b.file.match(/\d+/)[0]);
@@ -146,9 +166,8 @@ async function batchProcess(file, res, pdfDoc) {
     console.log("queue from batchProcessing: ", queue);
 
     const firstPendingFile = queue.find((e) => e.status === "pending");
-    normalProcess({ filename: firstPendingFile.file }, res);
     const index = queue.indexOf(firstPendingFile);
-    queue[index].status = "done";
+    normalProcess({ filename: firstPendingFile.file }, res, index);
   });
   return;
 }
@@ -185,18 +204,29 @@ app.post("/store", (req, res) => {
   });
 });
 
+function is200(res) {
+  const is200 = queue.every((e) => e.status !== "pending");
+  return is200;
+}
 app.post("/queue", (req, res) => {
   console.log("queue: ", queue);
-  const is200 = queue.every((e) => e.status === "done");
-  if (is200) {
-    res.send("finished processing");
+  if (is200(res)) {
+    res.status(200).end("finished processing");
     clean();
     return;
   }
   const firstPendingFile = queue.find((e) => e.status === "pending");
-  normalProcess({ filename: firstPendingFile.file }, res);
   const index = queue.indexOf(firstPendingFile);
-  queue[index].status = "done";
+  normalProcess({ filename: firstPendingFile.file }, res, index);
+});
+
+app.get("/getPagesCount", (req, res) => {
+  console.log("pagesCount: ", pagesCount);
+  res.send({ pagesCount });
+});
+
+app.get("/mergePDF", (req, res) => {
+  console.log("started mergingPDF...");
 });
 
 app.get("/", (req, res) => {
