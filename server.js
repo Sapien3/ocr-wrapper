@@ -30,7 +30,7 @@ const cors = require("cors");
 const multer = require("multer");
 const { exec } = require("child_process");
 
-// app.use(express.json());
+app.use(express.json());
 app.use(cors());
 // app.use(
 //   cors({
@@ -227,6 +227,13 @@ app.get("/getPagesCount", (req, res) => {
 
 app.get("/mergePDF", (req, res) => {
   console.log("started mergingPDF...");
+});
+
+app.post("/requestBatch", (req, res) => {
+  console.log("req: ", req.body);
+  const wantedQueue = queue[req.body.page - 1].binary;
+  console.log("wanted queue: ", wantedQueue);
+  res.send(wantedQueue);
 });
 
 app.get("/", (req, res) => {
