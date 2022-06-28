@@ -1,28 +1,3 @@
-// const { exec } = require("child_process");
-// const executeScript = (script) => {
-//   exec(script, (error, stdout, stderr) => {
-//     console.log(stdout);
-//     console.log(stderr);
-//     if (error !== null) {
-//       console.log(`exec error: ${error}`);
-//     }
-//   });
-// };
-
-// const express = require("express");
-// const app = express();
-// const port = 3070;
-
-// app.get("/", (req, res) => {
-//   console.log("started excuting...");
-//   executeScript("pdfOcr ./inputs/normal-ocr.pdf");
-//   res.send("done");
-// });
-
-// app.listen(port, () => {
-//   console.log(`app listening on port ${port}`);
-// });
-
 const fs = require("fs");
 const express = require("express");
 const app = express();
@@ -32,13 +7,6 @@ const { exec } = require("child_process");
 
 app.use(express.json());
 app.use(cors());
-// app.use(
-//   cors({
-//     origin: "http://localhost:3000",
-//   })
-// );
-// app.use("/pdf", express.static(__dirname + "/inputs"));
-// app.use("/pdf", express.static(__dirname + "/imgs"));
 const port = 3070;
 
 //queue indicates the priority of which file to process first
@@ -162,10 +130,6 @@ async function batchProcess(file, res) {
       });
     console.log("queue from batchProcessing: ", queue);
 
-    // for (let e of queue) {
-    //   e.status = "current";
-    //   normalProcess({ filename: e.file }, res);
-    // }
     executeNextScript(res);
   });
   return;
@@ -213,7 +177,6 @@ async function mergePdf(res) {
     //   if (err) throw err;
     //   console.log("merged file saved");
     // });
-    //send res
     res.status(200).send(pdfBytes);
     clean();
   });
@@ -265,20 +228,17 @@ app.get("/mergePDF", (req, res) => {
 
 app.post("/requestBatch", (req, res) => {
   console.log("req: ", req.body);
-  let i = 0;
   recurse();
   async function recurse() {
     if (!queue.length) {
+      await sleep(200);
       return recurse();
     }
     const wantedQueueBinary = queue[req.body.page - 1].binary;
-    console.log(wantedQueueBinary, " ", i);
     if (!wantedQueueBinary.length) {
-      i += 1;
       await sleep(1000);
       return recurse();
     }
-    console.log("wanted queue: ", wantedQueueBinary);
     return res.status(200).send(wantedQueueBinary);
   }
 });
