@@ -104,18 +104,21 @@ function processFile(file, res) {
 
     const currentQueue = queue.find((e) => e.status === "current");
     console.log("currentQueue: ", currentQueue);
-    if (is200()) {
-      res.status(200).end("finished processing");
-      clean();
-      return;
-    }
     const index = queue.indexOf(currentQueue);
     const buffArr = new Uint8Array(data);
     console.log("Unassigned int length: ", buffArr.length);
-    // res.status(201).send(buffArr);
+    const isFirstRequest = queue.every((e) => e.status !== "done");
+    if (isFirstRequest) res.status(201).send(buffArr);
     queue[index].binary = buffArr;
     queue[index].status = "done";
   });
+
+  if (is200()) {
+    console.log(queue);
+    return clean();
+  }
+
+  executeNextScript(res);
 }
 
 async function script(file, res) {
@@ -159,12 +162,21 @@ async function batchProcess(file, res) {
       });
     console.log("queue from batchProcessing: ", queue);
 
-    for (let e of queue) {
-      e.status = "current";
-      normalProcess({ filename: e.file }, res);
-    }
+    // for (let e of queue) {
+    //   e.status = "current";
+    //   normalProcess({ filename: e.file }, res);
+    // }
+    executeNextScript(res);
   });
   return;
+}
+
+function executeNextScript(res) {
+  const firstPendingFile = queue.find((e) => e.status === "pending");
+  console.log("firstPendingFile: ", firstPendingFile);
+  const index = queue.indexOf(firstPendingFile);
+  queue[index].status = "current";
+  normalProcess({ filename: firstPendingFile.file }, res);
 }
 
 async function splitPdf(pdfDoc) {
@@ -181,6 +193,32 @@ async function splitPdf(pdfDoc) {
   }
 }
 
+async function mergePdf(res) {
+  const mergedDocument = await PDFDocument.create();
+  fs.readdir("./outputs", async (err, files) => {
+    for (let file of files) {
+      // const target = file.match("splittedFile");
+      // const fileWithoutEx = file.split(".")[0];
+      const target = file.match(`_searchable`);
+      if (!target) continue;
+
+      const docAsBytes = await fs.promises.readFile(`./outputs/${file}`);
+      const Doc = await PDFDocument.load(docAsBytes);
+      const [copiedPage] = await mergedDocument.copyPages(Doc, [0]);
+      mergedDocument.addPage(copiedPage);
+    }
+    const pdfBytes = await mergedDocument.save();
+
+    // fs.writeFile("./outputs/merged.pdf", pdfBytes, (err) => {
+    //   if (err) throw err;
+    //   console.log("merged file saved");
+    // });
+    //send res
+    res.status(200).send(pdfBytes);
+    clean();
+  });
+}
+
 async function writePdfBytesToFile(fileName, pdfBytes) {
   return fs.promises.writeFile(`./outputs/${fileName}`, pdfBytes);
 }
@@ -193,9 +231,9 @@ app.post("/store", (req, res) => {
       return res.status(500).json(err);
     }
     // console.log("file: ", req.file);
-    // script(req.file, res);
+    script(req.file, res);
     // normalProcess(req.file, res);
-    playground(req.file, res);
+    // playground(req.file, res);
   });
 });
 
@@ -265,17 +303,10 @@ async function playground(file, res) {
 
   //merge
   const mergedDocument = await PDFDocument.create();
-  console.log(1);
   fs.readdir("./outputs", async (err, files) => {
-    console.log(2);
     for (let file of files) {
-      console.log(3);
-      // const fileWithoutEx = file.split(".")[0];
-      // const target = file.match(`${fileWithoutEx}_searchable`);
-      // console.log(fileWithoutEx, " ", target);
       const target = file.match("splittedFile");
       if (!target) continue;
-      console.log(4);
 
       const docAsBytes = await fs.promises.readFile(`./outputs/${file}`);
       const Doc = await PDFDocument.load(docAsBytes);
@@ -283,14 +314,11 @@ async function playground(file, res) {
       mergedDocument.addPage(copiedPage);
     }
     const pdfBytes = await mergedDocument.save();
-    console.log(5);
 
     fs.writeFile("./outputs/merged.pdf", pdfBytes, (err) => {
-      console.log(6);
       if (err) throw err;
       console.log("merged file saved");
     });
-    res.send(pdfBytes);
   });
 
   // clean();
