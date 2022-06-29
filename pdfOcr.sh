@@ -291,7 +291,7 @@ main() {
 
         timestamp="$(date '+%Y%m%d-%H%M%S.%N')"
         # echo "timestamp = \"$timestamp\""
-        temp_dir="pdfOcr_temp_${timestamp}"
+        temp_dir="./temp/pdfOcr_temp_${timestamp}"
         # echo "temp_dir = \"$temp_dir\""
         echo "Creating temporary working directory: \"$temp_dir\""
         mkdir -p "$temp_dir"
