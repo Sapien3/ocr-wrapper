@@ -12,6 +12,7 @@ const port = 3070;
 //queue indicates the priority of which file to process first
 let queue = [];
 let pagesCount;
+let requestedPage = -1;
 
 function sleep(time) {
   return new Promise((resolve) => setTimeout(resolve, time));
@@ -228,8 +229,13 @@ app.get("/mergePDF", (req, res) => {
 
 app.post("/requestBatch", (req, res) => {
   console.log("req: ", req.body);
+  requestedPage = req.body.page;
+  const localRequestedPage = req.body.page;
   recurse();
   async function recurse() {
+    if (requestedPage !== localRequestedPage)
+      return res.status(400).send("Aborted");
+
     if (!queue.length) {
       await sleep(200);
       return recurse();
