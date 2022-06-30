@@ -5,6 +5,6 @@
 #     "test":"bahaa"
 # }
 
-GET http://localhost:3070/pdf/normal.png HTTP/1.1
+GET http://localhost:3070/pdf/normal-ocr.pdf HTTP/1.1
 content-type: application/json
 

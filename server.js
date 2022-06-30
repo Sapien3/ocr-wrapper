@@ -10,69 +10,104 @@ app.use(cors());
 const port = 3070;
 
 //queue indicates the priority of which file to process first
-let queue = [];
+let queue;
 let pagesCount;
 let requestedPage = -1;
 let childProcess = {};
 let acontroller = {};
 let signal = {};
 
-// class Queue{
-//   constructor(arr){
-//       this.queue = arr;
-//   }
+class Queue {
+  constructor(arr) {
+    this.queue = arr;
+  }
 
-//   resetStatus() {
-//     this.queue = this.queue.map(item => ({file:item, status:'pending',binary:[]}));
-//   }
+  resetStatus() {
+    this.queue = this.queue.map((item) => ({
+      file: item,
+      status: "pending",
+      page: extractNumber(item),
+      binary: [],
+    }));
+  }
 
-//   sortAsc() {
-//     this.queue = this.queue.sort((a, b) => {
-//       const aOrder = extractNumber(a.file);
-//       const bOrder = extractNumber(b.file);
-//       return aOrder - bOrder;
-//     })
-//   }
+  resetCurrent() {
+    const currentIndex = this.findCurrentIndex();
+    this.queue[currentIndex].status = "pending";
+  }
 
-//   isFirstRequest(){
-//     return  this.queue.every((e) => e.status !== "done");
-//   }
+  sortAsc() {
+    this.queue = this.queue.sort((a, b) => {
+      const aOrder = extractNumber(a.file);
+      const bOrder = extractNumber(b.file);
+      return aOrder - bOrder;
+    });
+  }
 
-//   findFirstPendingIndex(){
-//       return this.queue.findIndex(item => item.status === "pending");
-//   }
+  isFirstRequest() {
+    return this.queue.every((e) => e.status !== "done");
+  }
 
-//   findCurrentIndex(){
-//       return this.queue.findIndex(item => item.status === "current");
-//   }
+  findFirstPendingIndex() {
+    return this.queue.findIndex((item) => item.status === "pending");
+  }
 
-//   makeCurrent(index){
-//       this.queue[index].status = "current";
-//   }
+  findCurrentIndex() {
+    return this.queue.findIndex((item) => item.status === "current");
+  }
 
-//   makeDone(index){
-//       this.queue[index].status = "done";
-//   }
+  findPageBinary(page) {
+    return this.queue.find((item) => item.page === page).binary;
+  }
 
-//   getCorrespondingFile(index){
-//     const currentIndex = this.findCurrentIndex();
-//     const fileWithoutEx = this.queue[currentIndex].file.split(".")[0];
-//     const targetName = `${fileWithoutEx}_searchable.pdf`
-//     return targetName;
-//   }
+  findPageIndex(page) {
+    return this.queue.findIndex((item) => item.file === page);
+  }
+  makeCurrent(index) {
+    this.queue[index].status = "current";
+  }
 
-//   setBinary(index, bufferArray){
-//       this.queue[index].binary = bufferArray;
-//   }
+  makeDone(index) {
+    this.queue[index].status = "done";
+  }
 
-//   setStatus(index, status){
-//       this.queue[index].status = status;
-//   }
+  moveItem(from, to) {
+    const item = this.queue.splice(from, 1)[0];
+    this.queue.splice(to, 0, item);
+  }
 
-//   is200(){
-//       return this.queue.every(item => item.status === "done");
-//   }
-// }
+  getItem(index) {
+    return this.queue[index];
+  }
+
+  getCorrespondingFile(index) {
+    const currentIndex = this.findCurrentIndex();
+    if (!currentIndex) return;
+    const fileWithoutEx = this.queue[currentIndex].file.split(".")[0];
+    const targetName = `${fileWithoutEx}_searchable.pdf`;
+    return targetName;
+  }
+
+  getIndexFromName(name) {
+    return this.queue.findIndex((item) => item.file === name);
+  }
+
+  setBinary(index, bufferArray) {
+    this.queue[index].binary = bufferArray;
+  }
+
+  setStatus(index, status) {
+    this.queue[index].status = status;
+  }
+
+  is200() {
+    return this.queue.every((item) => item.status === "done");
+  }
+
+  finishedProcessing() {
+    return this.queue.every((item) => item.status === "done");
+  }
+}
 
 function sleep(time) {
   return new Promise((resolve) => setTimeout(resolve, time));
@@ -106,15 +141,15 @@ function clean() {
 async function normalProcess(file, res) {
   // acontroller = new AbortController();
   // signal = acontroller.signal;
-  const filename = file.filename;
-  console.log(`bash ./pdfOcr.sh ./outputs/${filename}`);
+  // const filename = file.filename;
+  console.log(`bash ./pdfOcr.sh ./outputs/${file}`);
   childProcess = exec(
-    `bash ./pdfOcr.sh ./outputs/${filename}`,
+    `bash ./pdfOcr.sh ./outputs/${file}`,
 
     (error, stdout, stderr) => {
       console.log("stdout: ", stdout);
       console.log(stderr);
-      pdfToBinary(res, filename);
+      pdfToBinary(res, file);
       if (error !== null) {
         console.log(`exec error: ${error}`);
       }
@@ -124,38 +159,52 @@ async function normalProcess(file, res) {
 
 function pdfToBinary(res, filename) {
   console.log("pdfToBinary");
-  const fileWithoutEx = filename.split(".")[0];
-  const target = `${fileWithoutEx}_searchable.pdf`;
+  // const fileWithoutEx = filename.split(".")[0];
+  // const target = `${fileWithoutEx}_searchable.pdf`;
+  if (queue.finishedProcessing()) {
+    console.log("finished", queue.queue);
+    return;
+  }
+  const currentQueueIndex = queue.findCurrentIndex();
+  const target = queue.getCorrespondingFile(currentQueueIndex);
   fs.readFile(`./outputs/${target}`, function (err, data) {
     if (err) return;
-    // if (signal.aborted) {
-    //   console.log("aborted signal");
-    //   return;
-    // }
-    const currentQueue = queue.find((e) => e.status === "current");
-    if (!currentQueue) return;
-    console.log("queue from processFile: ", queue);
-    console.log("currentQueue: ", currentQueue);
-    const index = queue.indexOf(currentQueue);
+
     const buffArr = new Uint8Array(data);
     console.log("Unassigned int length: ", buffArr.length);
-    const isFirstRequest = queue.every((e) => e.status !== "done");
-    if (isFirstRequest) res.status(201).send(buffArr);
-    queue[index].binary = buffArr;
-    queue[index].status = "done";
-    childProcess = {};
-    queue = queue.sort((a, b) => {
-      const aOrder = extractNumber(a.file);
-      const bOrder = extractNumber(b.file);
-      return aOrder - bOrder;
-    });
-
-    if (is200()) {
-      console.log(queue);
+    if (queue.isFirstRequest()) res.status(201).send(buffArr);
+    queue.setBinary(currentQueueIndex, buffArr);
+    queue.setStatus(currentQueueIndex, "done");
+    queue.sortAsc();
+    if (queue.is200()) {
+      console.log("200: ", queue);
       return clean();
     }
 
     executeNextScript(res);
+
+    // const currentQueue = queue.find((e) => e.status === "current");
+    // if (!currentQueue) return;
+    // console.log("queue from processFile: ", queue);
+    // console.log("currentQueue: ", currentQueue);
+    // const index = queue.indexOf(currentQueue);
+    // const buffArr = new Uint8Array(data);
+    // console.log("Unassigned int length: ", buffArr.length);
+    // const isFirstRequest = queue.every((e) => e.status !== "done");
+    // if (isFirstRequest) res.status(201).send(buffArr);
+    // queue[index].binary = buffArr;
+    // queue[index].status = "done";
+    // childProcess = {};
+    // queue = queue.sort((a, b) => {
+    //   const aOrder = extractNumber(a.file);
+    //   const bOrder = extractNumber(b.file);
+    //   return aOrder - bOrder;
+    // });
+
+    // if (is200()) {
+    //   console.log(queue);
+    //   return clean();
+    // }
   });
 }
 
@@ -219,15 +268,21 @@ async function batchProcess(file, res) {
   fs.readdir("./outputs", async (err, files) => {
     if (err) throw err;
 
-    queue = files
-      .filter((file) => file.match("splittedFile"))
-      .map((e) => ({ file: e, status: "pending", binary: [] }))
-      .sort((a, b) => {
-        const aOrder = extractNumber(a.file);
-        const bOrder = extractNumber(b.file);
-        return aOrder - bOrder;
-      })
-      .map((e) => ({ ...e, page: extractNumber(e.file) }));
+    let wantedFiles = files.filter((file) => file.includes("splittedFile"));
+    // queue = files
+    //   .filter((file) => file.match("splittedFile"))
+    //   .map((e) => ({ file: e, status: "pending", binary: [] }))
+    //   .sort((a, b) => {
+    //     const aOrder = extractNumber(a.file);
+    //     const bOrder = extractNumber(b.file);
+    //     return aOrder - bOrder;
+    //   })
+    //   .map((e) => ({ ...e, page: extractNumber(e.file) }));
+
+    queue = new Queue(wantedFiles);
+    queue.resetStatus();
+    queue.sortAsc();
+
     console.log("queue from batchProcessing: ", queue);
 
     executeNextScript(res);
@@ -240,11 +295,15 @@ function extractNumber(str) {
 }
 
 function executeNextScript(res) {
-  const firstPendingFile = queue.find((e) => e.status === "pending");
-  console.log("firstPendingFile: ", firstPendingFile);
-  const index = queue.indexOf(firstPendingFile);
-  queue[index].status = "current";
-  normalProcess({ filename: queue[index].file }, res);
+  // console.log("firstPendingFile: ", firstPendingFile);
+  // const index = queue.indexOf(firstPendingFile);
+  // queue[index].status = "current";
+  const firstPendingIndex = queue.findFirstPendingIndex();
+  console.log("queue from executeNextScript: ", queue.queue);
+  console.log("firstPendingIndex: ", firstPendingIndex);
+  const file = queue.getItem(firstPendingIndex).file;
+  queue.setStatus(firstPendingIndex, "current");
+  normalProcess(file, res);
 }
 
 async function splitPdf(pdfDoc) {
@@ -300,19 +359,24 @@ function moveElement(arr, from, to) {
 }
 
 function changePriority(pageNum, res) {
-  const index = queue.findIndex((e) => e.page === pageNum);
+  // const index = queue.findIndex((e) => e.page === pageNum);
   // const currentIndex = queue.findIndex((e) => e.status === "current");
-  const currentQueue = queue.find((e) => e.status === "current");
-  const currentIndex = queue.indexOf(currentQueue);
-  if (index !== currentIndex) {
+
+  const pageIndex = queue.findPageIndex(pageNum);
+  const currentIndex = queue.findCurrentIndex();
+  // const currentQueue = queue.find((e) => e.status === "current");
+  // const currentIndex = queue.indexOf(currentQueue);
+  if (pageIndex !== currentIndex) {
     try {
-      currentQueue.status = "pending";
+      // currentQueue.status = "pending";
+      queue.setStatus(currentIndex, "pending");
     } catch {
       //do nothing
     }
-    moveElement(queue, index, currentQueue);
+    // moveElement(queue, index, currentQueue);
+    queue.moveItem(pageIndex, currentIndex);
 
-    console.log("queue after changePriority: ", queue);
+    console.log("queue after changePriority: ", queue.queue);
     executeNextScript(res);
   }
 }
@@ -369,11 +433,8 @@ app.post("/requestBatch", async (req, res) => {
     console.log(`batch ignored:  ${requestedPage} !== ${localRequestedPage}`);
     return;
   }
-  const prcocessingFinished = queue.every((e) => e.status !== "pending");
-  if (!prcocessingFinished && !queue[page].binary.length) {
-    // if (childProcess) killProcess(childProcess);
-    changePriority(localRequestedPage, res);
-  }
+
+  if (!queue.finishedProcessing()) changePriority(localRequestedPage, res);
 
   //after giving the priority, recurese until the process is finsihed
   recurse();
@@ -382,12 +443,12 @@ app.post("/requestBatch", async (req, res) => {
       return res.status(400).send("Aborted");
     }
 
-    const wantedQueueBinary = queue.find((e) => e.page === page).binary;
+    // const wantedQueueBinary = queue.find((e) => e.page === page).binary;
+    const wantedQueueBinary = queue.findPageBinary(page);
     if (!wantedQueueBinary.length) {
       await sleep(1000);
       return recurse();
     }
-    console.log(page, "binary: ", wantedQueueBinary);
     return res.status(200).send(wantedQueueBinary);
   }
 });
