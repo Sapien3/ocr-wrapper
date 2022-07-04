@@ -165,7 +165,8 @@ function pdfToBinary(res, filename) {
 
     if (is200()) {
       // console.log(queue);
-      return clean();
+      // return clean();
+      return;
     }
 
     executeNextScript(res);
@@ -294,6 +295,8 @@ async function mergePdf(res) {
     // fs.writeFile("./outputs/merged.pdf", pdfBytes, (err) => {
     //   if (err) throw err;
     //   console.log("merged file saved");
+    //   // res.status(200).download("./outputs/merged.pdf");
+    //   // clean();
     // });
     res.status(200).send(pdfBytes);
     clean();
@@ -305,7 +308,7 @@ async function writePdfBytesToFile(fileName, pdfBytes) {
 }
 
 function is200() {
-  const is200 = queue.every((e) => e.status !== "pending");
+  const is200 = queue.every((e) => e.status === "done");
   return is200;
 }
 
@@ -388,7 +391,10 @@ app.get("/getPagesCount", (req, res) => {
 });
 
 app.get("/mergePDF", (req, res) => {
-  console.log("started mergingPDF...");
+  if (is200()) {
+    return mergePdf(res);
+  }
+  res.status(204).end("not ready");
 });
 
 app.post("/requestBatch", async (req, res) => {

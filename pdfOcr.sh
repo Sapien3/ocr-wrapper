@@ -309,7 +309,7 @@ main() {
         # ever 80 chars or so as well. This will require spinning off another process in the background that does a file
         # check once per second or so to monitor progress. Once all files are created I can kill the background process
         # which was doing that monitoring.
-        pdftoppm $user_password -tiff -r 300 "$pdf_in" "$temp_dir/pg"
+        pdftoppm $user_password -tiff -r 150 "$pdf_in" "$temp_dir/pg"
 
         ret_code="$?"
         if [ "$ret_code" -ne "$RETURN_CODE_SUCCESS" ]; then
