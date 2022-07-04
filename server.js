@@ -121,6 +121,7 @@ async function normalProcess(res, queueIndex) {
         try {
           const fileWithoutEx = queue[queueIndex].file.split(".")[0];
           fs.unlinkSync(`./outputs/${fileWithoutEx}_searchable.pdf`);
+          queue[queueIndex].status = "pending";
         } catch {
           /*do nothing*/
         }
@@ -157,12 +158,7 @@ function pdfToBinary(res, filename) {
     queue[index].binary = buffArr;
     queue[index].status = "done";
     childProcess = {};
-    queue = queue.sort((a, b) => {
-      const aOrder = extractNumber(a.file);
-      const bOrder = extractNumber(b.file);
-      return aOrder - bOrder;
-    });
-
+    queue = sortElements(queue);
     if (is200()) {
       // console.log(queue);
       // return clean();
@@ -236,12 +232,8 @@ async function batchProcess(file, res) {
     queue = files
       .filter((file) => file.match("splittedFile"))
       .map((e) => ({ file: e, status: "pending", binary: [] }))
-      .sort((a, b) => {
-        const aOrder = extractNumber(a.file);
-        const bOrder = extractNumber(b.file);
-        return aOrder - bOrder;
-      })
       .map((e) => ({ ...e, page: extractNumber(e.file) }));
+    queue = sortElements(queue);
     // console.log("queue from batchProcessing: ", queue);
 
     executeNextScript(res);
@@ -254,11 +246,14 @@ function extractNumber(str) {
 }
 
 function executeNextScript(res) {
+  const currentQueue = queue.find((e) => e.status === "current");
   const firstPendingFile = queue.find((e) => e.status === "pending");
   // console.log("firstPendingFile: ", firstPendingFile);
   const index = queue.indexOf(firstPendingFile);
+  if (!firstPendingFile && currentQueue) {
+    return pdfToBinary(res, currentQueue.file);
+  }
   queue[index].status = "current";
-  if (queue[index].aborted) queue[index].aborted = false;
   normalProcess(res, index);
 }
 
@@ -279,12 +274,9 @@ async function splitPdf(pdfDoc) {
 async function mergePdf(res) {
   const mergedDocument = await PDFDocument.create();
   fs.readdir("./outputs", async (err, files) => {
+    files = files.filter((file) => file.includes("_searchable"));
+    files = files.sort((a, b) => extractNumber(a) - extractNumber(b));
     for (let file of files) {
-      // const target = file.match("splittedFile");
-      // const fileWithoutEx = file.split(".")[0];
-      const target = file.match(`_searchable`);
-      if (!target) continue;
-
       const docAsBytes = await fs.promises.readFile(`./outputs/${file}`);
       const Doc = await PDFDocument.load(docAsBytes);
       const [copiedPage] = await mergedDocument.copyPages(Doc, [0]);
@@ -295,7 +287,9 @@ async function mergePdf(res) {
     // fs.writeFile("./outputs/merged.pdf", pdfBytes, (err) => {
     //   if (err) throw err;
     //   console.log("merged file saved");
+    //   console.log(queue);
     //   // res.status(200).download("./outputs/merged.pdf");
+    //   res.status(200).send(pdfBytes);
     //   // clean();
     // });
     res.status(200).send(pdfBytes);
@@ -312,6 +306,13 @@ function is200() {
   return is200;
 }
 
+function sortElements(arr) {
+  return arr.sort((a, b) => {
+    const aOrder = extractNumber(a.file);
+    const bOrder = extractNumber(b.file);
+    return aOrder - bOrder;
+  });
+}
 function moveElement(arr, from, to) {
   arr.splice(to, 0, arr.splice(from, 1)[0]);
 }
@@ -323,22 +324,14 @@ function changePriority(pageNum, res) {
   const currentIndex = queue.indexOf(currentQueue);
   if (index !== currentIndex) {
     killProcess(childProcess, currentIndex);
-    try {
-      currentQueue.status = "pending";
-    } catch {
-      //do nothing
-      // console.log("couldn't find current queue");
-    }
-
     moveElement(queue, index, currentQueue);
-
     // console.log("queue after changePriority: ", queue);
     executeNextScript(res);
   }
 }
 
 function killProcess(process, queueIndex) {
-  const queueToKill = queue[queueIndex];
+  // const queueToKill = queue[queueIndex];
   process.kill();
   fs.rmSync("./temp", { recursive: true, force: true });
   // const redundantFile = queue.filter(e => e.status !== "done" )
