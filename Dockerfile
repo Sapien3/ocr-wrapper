@@ -19,4 +19,4 @@ RUN npm install
 
 COPY . .
 EXPOSE 3070
-CMD ["npm", "start"]
+CMD ["npm", "run", "start"]

@@ -37,8 +37,9 @@ function clean(filename = null) {
     fs.rmSync("./temp", { recursive: true, force: true });
     fs.rmSync("./outputs", { recursive: true, force: true });
     fs.mkdirSync("./outputs");
-  } catch {
+  } catch (e) {
     /*do nothing*/
+    console.log("cleaning problem: ", e);
   }
   // fs.readdir("./outputs", (err, files) => {
   //   if (err) throw err;
