@@ -4,11 +4,13 @@ const app = express();
 const cors = require("cors");
 const multer = require("multer");
 const { exec } = require("child_process");
-const pm2 = require("pm2");
+const PDFDocument = require("pdf-lib").PDFDocument;
 
 app.use(express.json());
 app.use(cors());
 const port = 3070;
+const output_dir = "./outputs";
+const temp_dir = "./temp";
 
 //queue indicates the priority of which file to process first
 let queue = [];
@@ -21,9 +23,10 @@ function sleep(time) {
   return new Promise((resolve) => setTimeout(resolve, time));
 }
 
+//multer is the middleware that handles file storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, "./outputs");
+    cb(null, output_dir);
   },
   filename: function (req, file, cb) {
     cb(null, file.originalname.split(" ").join("-"));
@@ -32,32 +35,21 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage }).single("file");
 
-function clean(filename = null) {
+function clean() {
   try {
-    fs.rmSync("./temp", { recursive: true, force: true });
-    fs.rmSync("./outputs", { recursive: true, force: true });
-    fs.mkdirSync("./outputs");
+    fs.rmSync(temp_dir, { recursive: true, force: true });
+    fs.rmSync(output_dir, { recursive: true, force: true });
+    fs.mkdirSync(output_dir);
   } catch (e) {
-    /*do nothing*/
     console.log("cleaning problem: ", e);
   }
-  // fs.readdir("./outputs", (err, files) => {
-  //   if (err) throw err;
-
-  //   // if (filename) files = files.filter((file) => file !== filename);
-  //   // for (const file of files) {
-  //   //   fs.unlink(`./outputs/${file}`, (err) => {
-  //   //     if (err) console.log("file not found: ", file);
-  //   //   });
-  //   // }
-  // });
 }
 
-async function normalProcess(res, queueIndex) {
+async function runCommand(res, queueIndex) {
   const filename = queue[queueIndex].file;
-  console.log(`bash ./pdfOcr.sh ./outputs/${filename}`);
+  console.log(`bash ./pdfOcr.sh ${output_dir}/${filename}`);
   childProcess = exec(
-    `bash ./pdfOcr.sh ./outputs/${filename}`,
+    `bash ./pdfOcr.sh ${output_dir}/${filename}`,
 
     (error, stdout, stderr) => {
       let killed = false;
@@ -65,7 +57,7 @@ async function normalProcess(res, queueIndex) {
         try {
           queue[queueIndex].status = "pending";
           const fileWithoutEx = queue[queueIndex].file.split(".")[0];
-          fs.unlinkSync(`./outputs/${fileWithoutEx}_searchable.pdf`);
+          fs.unlinkSync(`${output_dir}/${fileWithoutEx}_searchable.pdf`);
         } catch {
           /*do nothing*/
         }
@@ -74,6 +66,7 @@ async function normalProcess(res, queueIndex) {
       }
 
       if (killed) return;
+      // console.log("stout: ", stdout);
       console.log("stderr: ", stderr);
       pdfToBinary(res, filename);
     }
@@ -85,27 +78,25 @@ function pdfToBinary(res, filename) {
     console.log("pdfToBinary: ", filename);
     const fileWithoutEx = filename.split(".")[0];
     const target = `${fileWithoutEx}_searchable.pdf`;
-    fs.readFile(`./outputs/${target}`, function (err, data) {
+    fs.readFile(`${output_dir}/${target}`, function (err, data) {
       if (err) return;
       const currentQueue = queue.find((e) => e.status === "current");
       if (!currentQueue) return;
       // console.log("queue from processFile: ", queue);
-      // console.log("currentQueue: ", currentQueue);
+      // read current queue binary and then store it in the queue
       const index = queue.indexOf(currentQueue);
       const buffArr = new Uint8Array(data);
       // console.log("Unassigned int length: ", buffArr.length);
       const isFirstRequest = queue.every((e) => e.status !== "done");
+      //sends a json object containing the binary data if it is the first request
       if (isFirstRequest) res.status(200).send(buffArr);
       queue[index].binary = buffArr;
       queue[index].status = "done";
       queue = sortElements(queue);
-      if (is200()) {
-        // console.log(queue);
-        // return clean();
-        return;
-      }
 
-      executeNextScript(res);
+      if (is200()) return;
+
+      executeNextQueue(res);
     });
   } catch (e) {
     console.log("pdfToBinary error: ", e);
@@ -113,18 +104,14 @@ function pdfToBinary(res, filename) {
 }
 
 async function batchProcess(file, res) {
-  console.log("file: ", file);
-  // if (childProcess) {
-  //   await sleep(1000);
-  //   killProcess(childProcess, true, file.originalname);
-  // }
+  // console.log("file: ", file);
   const filename = file.filename;
-  const url = `./outputs/${filename}`;
+  const url = `${output_dir}/${filename}`;
   const docmentAsBytes = await fs.promises.readFile(url);
   const pdfDoc = await PDFDocument.load(docmentAsBytes);
   pagesCount = pdfDoc.getPageCount();
   await splitPdf(pdfDoc);
-  fs.readdir("./outputs", async (err, files) => {
+  fs.readdir(output_dir, async (err, files) => {
     if (err) throw err;
     const filteredFiles = files.filter((file) => !file.includes("_searchable"));
     queue = filteredFiles
@@ -134,7 +121,7 @@ async function batchProcess(file, res) {
     queue = sortElements(queue);
     // console.log("queue from batchProcessing: ", queue);
 
-    executeNextScript(res);
+    executeNextQueue(res);
   });
   return;
 }
@@ -143,7 +130,7 @@ function extractNumber(str) {
   return Number(str.match(/\d+/)[0]);
 }
 
-function executeNextScript(res) {
+function executeNextQueue(res) {
   const currentQueue = queue.find((e) => e.status === "current");
   const firstPendingFile = queue.find((e) => e.status === "pending");
   // console.log("firstPendingFile: ", firstPendingFile);
@@ -152,7 +139,7 @@ function executeNextScript(res) {
     return pdfToBinary(res, currentQueue.file);
   }
   queue[index].status = "current";
-  normalProcess(res, index);
+  runCommand(res, index);
 }
 
 async function splitPdf(pdfDoc) {
@@ -171,32 +158,26 @@ async function splitPdf(pdfDoc) {
 
 async function mergePdf(res) {
   const mergedDocument = await PDFDocument.create();
-  fs.readdir("./outputs", async (err, files) => {
+  fs.readdir(output_dir, async (err, files) => {
     files = files.filter((file) => file.includes("_searchable"));
     files = files.sort((a, b) => extractNumber(a) - extractNumber(b));
     for (let file of files) {
-      const docAsBytes = await fs.promises.readFile(`./outputs/${file}`);
+      const docAsBytes = await fs.promises.readFile(`${output_dir}/${file}`);
       const Doc = await PDFDocument.load(docAsBytes);
       const [copiedPage] = await mergedDocument.copyPages(Doc, [0]);
       mergedDocument.addPage(copiedPage);
     }
     const pdfBytes = await mergedDocument.save();
 
-    // fs.writeFile("./outputs/merged.pdf", pdfBytes, (err) => {
-    //   if (err) throw err;
-    //   console.log("merged file saved");
-    //   console.log(queue);
-    //   // res.status(200).download("./outputs/merged.pdf");
-    //   res.status(200).send(pdfBytes);
-    //   // clean();
-    // });
+    // await writePdfBytesToFile("merged.pdf", pdfBytes);
+
     res.status(200).send(pdfBytes);
     clean();
   });
 }
 
 async function writePdfBytesToFile(fileName, pdfBytes) {
-  return fs.promises.writeFile(`./outputs/${fileName}`, pdfBytes);
+  return fs.promises.writeFile(`${output_dir}/${fileName}`, pdfBytes);
 }
 
 function is200() {
@@ -224,35 +205,20 @@ function changePriority(pageNum, res) {
     killProcess(childProcess);
     moveElement(queue, index, currentQueue);
     // console.log("queue after changePriority: ", queue);
-    executeNextScript(res);
+    executeNextQueue(res);
   }
 }
 
 function killProcess(process) {
   try {
-    // if (hardKill) {
-    //   process.kill();
-    //   console.log("hardKill");
-    //   queue = [];
-    //   pagesCount;
-    //   requestedPage = -1;
-    //   childProcess = null;
-    //   clean();
-    // } else {
     process.kill();
-    fs.rmSync("./temp", { recursive: true, force: true });
-    // }
+    fs.rmSync(temp_dir, { recursive: true, force: true });
   } catch (e) {
-    //do nothing
     console.log("kill error: ", e);
   }
 }
 
 app.post("/store", async (req, res) => {
-  // if (childProcess) {
-  //   killProcess(childProcess, true);
-  //   await sleep(1000);
-  // }
   clean();
   upload(req, res, function (err) {
     if (err instanceof multer.MulterError) {
@@ -260,10 +226,8 @@ app.post("/store", async (req, res) => {
     } else if (err) {
       return res.status(500).json(err);
     }
-    // console.log("file: ", req.file);
+
     batchProcess(req.file, res);
-    // normalProcess(req.file, res);
-    // playground(req.file, res);
   });
 });
 
@@ -301,12 +265,17 @@ app.post("/requestBatch", async (req, res) => {
     changePriority(localRequestedPage, res);
   }
 
+  let i = 0;
+  const maxTime = 45000;
   //after giving the priority, recurese until the process is finsihed
   recurse();
   async function recurse() {
+    if (i > maxTime) return res.status(204).end();
     const wantedQueueBinary = queue.find((e) => e.page === page).binary;
     if (!wantedQueueBinary.length) {
-      await sleep(300);
+      const waitingTime = 300;
+      i += waitingTime;
+      await sleep(waitingTime);
       // console.log("recurse");
       return recurse();
     }
@@ -322,7 +291,6 @@ app.get("/checkAvailability", (req, res) => {
     res.status(200).send("killing main thread");
     killProcess(childProcess);
     process.exit(2);
-    // pm2.disconnect();
   }
   res.status(200).send("available");
 });
@@ -333,36 +301,3 @@ app.get("/", (req, res) => {
 app.listen(port, () => {
   console.log(`app listening on port ${port}`);
 });
-
-const PDFDocument = require("pdf-lib").PDFDocument;
-
-async function playground(file, res) {
-  const filename = file.filename;
-  const url = `./outputs/${filename}`;
-  const docmentAsBytes = await fs.promises.readFile(url);
-  const pdfDoc = await PDFDocument.load(docmentAsBytes);
-  pagesCount = pdfDoc.getPageCount();
-  await splitPdf(pdfDoc);
-
-  //merge
-  const mergedDocument = await PDFDocument.create();
-  fs.readdir("./outputs", async (err, files) => {
-    for (let file of files) {
-      const target = file.match("splittedFile");
-      if (!target) continue;
-
-      const docAsBytes = await fs.promises.readFile(`./outputs/${file}`);
-      const Doc = await PDFDocument.load(docAsBytes);
-      const [copiedPage] = await mergedDocument.copyPages(Doc, [0]);
-      mergedDocument.addPage(copiedPage);
-    }
-    const pdfBytes = await mergedDocument.save();
-
-    fs.writeFile("./outputs/merged.pdf", pdfBytes, (err) => {
-      if (err) throw err;
-      console.log("merged file saved");
-    });
-  });
-
-  // clean();
-}
