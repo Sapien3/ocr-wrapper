@@ -104,6 +104,7 @@ app.get("/checkAvailability", (req, res) => {
   }
   res.status(200).send("available");
 });
+
 app.get("/", (req, res) => {
   res.send("connected\n");
 });

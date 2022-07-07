@@ -20,5 +20,5 @@ module.exports = {
     const is200 = queue.every((e) => e.status === "done");
     return is200;
   },
-  extractNumber: extractNumber,
+  extractNumber,
 };

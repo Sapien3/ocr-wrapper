@@ -176,11 +176,6 @@ function killProcess(process) {
 }
 
 module.exports = {
-  //   output_dir,
-  //   queue,
-  //   childProcess,
-  //   requestedPage,
-  //   pagesCount,
   clean,
   killProcess,
   changePriority,
